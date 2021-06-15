@@ -1,27 +1,19 @@
-from datetime import datetime
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, status, HTTPException
+from .schemas import Kupovina
 import pandas as pd
 
 # kreiramo instancu klase FastAPI
 app = FastAPI()
 
-
-class Kupovina(BaseModel):
-    id: int
-    kupac: str
-    grad: str
-    datum_vrijeme: datetime
-    proizvod: str
-    cijena: float
+filepath = './app/kupovina.csv'
 
 
 # kreiranje novih podataka
-@app.post('/kupovina')
+@app.post('/kupovina', status_code=status.HTTP_201_CREATED)
 def create(kupovina: Kupovina):
-    data = pd.read_csv('kupovina.csv')
+    data = pd.read_csv(filepath)
     if kupovina.id in data.to_dict()['id'].values():
-        return {'id':'already exists'}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'id {kupovina.id} already exists')
     new_data = pd.DataFrame({
         'id': [kupovina.id],
         'kupac': [kupovina.kupac],
@@ -31,14 +23,14 @@ def create(kupovina: Kupovina):
         'cijena': [kupovina.cijena]
     })
     data = data.append(new_data)
-    data.to_csv('kupovina.csv', index = False)
+    data.to_csv(filepath, index=False)
     return kupovina
 
 
 # citanje svih podataka
 @app.get('/kupovina')
 def get_all():
-    data = pd.read_csv('kupovina.csv')
+    data = pd.read_csv(filepath)
     all_data = data.transpose().to_dict()
     return all_data
 
@@ -46,23 +38,22 @@ def get_all():
 # citanje odredjenog podatka
 @app.get('/kupovina/{id}')
 def get_one(id: int):
-    data = pd.read_csv('kupovina.csv')
+    data = pd.read_csv(filepath)
     all_data = data.transpose().to_dict()
     for data in all_data:
         if(all_data[data]['id'] == id):
             one_data = all_data[data]
             return one_data
-    return {'id':'doesn\'t exist'}
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'id {id} not available')
 
 
 # azuriranje odredjenog podatka
-@app.put('/kupovina/{id}')
+@app.put('/kupovina/{id}', status_code=status.HTTP_202_ACCEPTED)
 def update(id: int, kupovina: Kupovina):
-    data = pd.read_csv('kupovina.csv')
+    data = pd.read_csv(filepath)
     if id not in data.to_dict()['id'].values():
-        return {'id': 'doesn\'t exist'}
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'id {id} not available')
     data = data.transpose().to_dict()
-    returnvalue=''
     for index in data:
         if data[index]['id'] == id:
             data[index] = {
@@ -73,18 +64,17 @@ def update(id: int, kupovina: Kupovina):
                 'proizvod': kupovina.proizvod,
                 'cijena': kupovina.cijena
             }
-            returnvalue = data[index]
     data = pd.DataFrame(data)
-    data.transpose().to_csv('kupovina.csv', index=False)
-    return returnvalue
+    data.transpose().to_csv(filepath, index=False)
+    return {'detail': 'updated successfully'}
 
 
 # brisanje odredjenog podatka
-@app.delete('/kupovina/{id}')
+@app.delete('/kupovina/{id}', status_code=status.HTTP_204_NO_CONTENT)
 def delete(id: int):
-    data = pd.read_csv('kupovina.csv')
+    data = pd.read_csv(filepath)
     if id not in data.to_dict()['id'].values():
-        return {'id': 'doesn\'t exist'}
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'id {id} not available')
     data = data.transpose().to_dict()
     temp=''
     for index in data:
@@ -93,10 +83,10 @@ def delete(id: int):
             temp = index
             break
     del data[temp]
-    if (data):
+    if data:
         data = pd.DataFrame(data)
-        data.transpose().to_csv('kupovina.csv', index=False)
+        data.transpose().to_csv(filepath, index=False)
     else:
-        data = pd.DataFrame({'id': [],'kupac': [], 'grad': [],'datum_vrijeme': [],'proizvod': [],'cijena': []})
-        data.to_csv('kupovina.csv', index = False)
-    return {'data': 'deleted successfully'}
+        data = pd.DataFrame({'id': [], 'kupac': [], 'grad': [], 'datum_vrijeme': [], 'proizvod': [], 'cijena': []})
+        data.to_csv('kupovina.csv', index=False)
+    return {'detail': 'deleted successfully'}
